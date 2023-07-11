@@ -72,6 +72,8 @@ public class Asteroid : MonoBehaviour
         // Create the new asteroid at half the size of the current
         Asteroid half = Instantiate(this, position, transform.rotation);
         half.size = size * 0.5f;
+        half.GetComponent<BoxCollider2D>().enabled = true;
+        half.GetComponent<Asteroid>().enabled = true;
 
         // Set a random trajectory
         half.SetTrajectory(Random.insideUnitCircle.normalized);

@@ -1,7 +1,9 @@
-﻿using UnityEngine;
+using UnityEngine;
+using Unity.MLAgents;
+using Unity.MLAgents.Sensors;
+using Unity.MLAgents.Actuators;
 
-[RequireComponent(typeof(Rigidbody2D))]
-public class Player : MonoBehaviour
+public class PlayerAgent : Agent
 {
     public new Rigidbody2D rigidbody { get; private set; }
     public Bullet bulletPrefab;
@@ -17,13 +19,15 @@ public class Player : MonoBehaviour
 
     public bool screenWrapping = true;
     private Bounds screenBounds;
+    private bool canTakeRewardForAvoidingBeingHit = true;
+    private bool canShoot = false;
 
     private void Awake()
     {
         rigidbody = GetComponent<Rigidbody2D>();
     }
 
-    private void Start()
+    public override void Initialize()
     {
         GameObject[] boundaries = GameObject.FindGameObjectsWithTag("Boundary");
 
@@ -37,30 +41,62 @@ public class Player : MonoBehaviour
         screenBounds.Encapsulate(Camera.main.ScreenToWorldPoint(Vector3.zero));
         screenBounds.Encapsulate(Camera.main.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, 0f)));
     }
-
-    private void OnEnable()
+    
+    public override void CollectObservations(VectorSensor sensor)
     {
-        // Turn off collisions for a few seconds after spawning to ensure the
-        // player has enough time to safely move away from asteroids
-        TurnOffCollisions();
-        Invoke(nameof(TurnOnCollisions), respawnInvulnerability);
+        sensor.AddObservation(transform.position.x);
+        sensor.AddObservation(transform.position.y);
+        sensor.AddObservation(transform.rotation.z);
+        sensor.AddObservation(rigidbody.velocity);
     }
 
-    private void Update()
+    public override void OnActionReceived(ActionBuffers actions)
     {
-        thrusting = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+        thrusting = actions.DiscreteActions[0] == 1;
+        turnDirection = 0f;
+
+        if (actions.DiscreteActions[1] == 1)
+        {
+            turnDirection = 1f;
+        }
+        else if (actions.DiscreteActions[1] == 2)
+        {
+            turnDirection = -1f;
+        }
+
+        if (actions.DiscreteActions[2] == 1 && !canShoot) {
+            canShoot = true;
+            Shoot();
+        } else if (actions.DiscreteActions[2] == 0) {
+            canShoot = false;
+        }
+    }
+
+    private void Shoot()
+    {
+        Bullet bullet = Instantiate(bulletPrefab, transform.position, transform.rotation);
+        bullet.Shoot(transform.up);
+    }
+
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        ActionSegment<int> discreteActions = actionsOut.DiscreteActions;
+
+        bool forwardInput = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+        discreteActions[0] = forwardInput ? 1 : 0;
 
         if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) {
-            turnDirection = 1f;
-        } else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) {
-            turnDirection = -1f;
-        } else {
-            turnDirection = 0f;
+            discreteActions[1] = 1;
+        }
+        else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) {
+            discreteActions[1] = 2;
+        }
+        else {
+            discreteActions[1] = 0;
         }
 
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0)) {
-            Shoot();
-        }
+        bool shootInput = Input.GetKey(KeyCode.Space) || Input.GetMouseButtonDown(0);
+        discreteActions[2] = shootInput ? 1 : 0;
     }
 
     private void FixedUpdate()
@@ -75,6 +111,10 @@ public class Player : MonoBehaviour
 
         if (screenWrapping) {
             ScreenWrap();
+        }
+
+        if (canTakeRewardForAvoidingBeingHit) {
+            AddReward(0.0001f);
         }
     }
 
@@ -95,31 +135,25 @@ public class Player : MonoBehaviour
         }
     }
 
-    private void Shoot()
-    {
-        Bullet bullet = Instantiate(bulletPrefab, transform.position, transform.rotation);
-        bullet.Shoot(transform.up);
-    }
-
-    private void TurnOffCollisions()
-    {
-        gameObject.layer = LayerMask.NameToLayer("Ignore Collisions");
-    }
-
-    private void TurnOnCollisions()
-    {
-        gameObject.layer = LayerMask.NameToLayer("Player");
-    }
-
     private void OnCollisionEnter2D(Collision2D collision)
     {
+        canTakeRewardForAvoidingBeingHit = false;
+
         if (collision.gameObject.CompareTag("Asteroid"))
         {
             rigidbody.velocity = Vector3.zero;
             rigidbody.angularVelocity = 0f;
 
-            GameManager.Instance.OnPlayerDeath(this);
+            GameManager.Instance.OnPlayerDeath();
+        } 
+        else if (collision.gameObject.CompareTag("Boundary"))
+        {
+            AddReward(-0.1f);
         }
     }
 
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        canTakeRewardForAvoidingBeingHit = true;
+    }
 }

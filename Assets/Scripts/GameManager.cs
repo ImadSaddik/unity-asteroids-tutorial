@@ -8,11 +8,12 @@ public class GameManager : MonoBehaviour
     public int score { get; private set; }
     public int lives { get; private set; }
 
-    [SerializeField] private Player player;
+    [SerializeField] private PlayerAgent player;
     [SerializeField] private ParticleSystem explosionEffect;
     [SerializeField] private GameObject gameOverUI;
     [SerializeField] private Text scoreText;
     [SerializeField] private Text livesText;
+    [SerializeField] private Text rewardText;
 
     private void Awake()
     {
@@ -31,14 +32,20 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        if (lives <= 0 && Input.GetKeyDown(KeyCode.Return)) {
+        // if (lives <= 0 && Input.GetKeyDown(KeyCode.Return)) {
+        //     NewGame();
+        // }
+
+        if (lives <= 0) {
             NewGame();
         }
+        rewardText.text = "Reward: " + player.GetCumulativeReward().ToString("0.00");
     }
 
     private void NewGame()
     {
         Asteroid[] asteroids = FindObjectsOfType<Asteroid>();
+        player.gameObject.SetActive(true);
 
         for (int i = 0; i < asteroids.Length; i++) {
             Destroy(asteroids[i].gameObject);
@@ -65,8 +72,14 @@ public class GameManager : MonoBehaviour
 
     private void Respawn()
     {
+        player.gameObject.transform.position = Vector3.zero;
         player.transform.position = Vector3.zero;
-        player.gameObject.SetActive(true);
+        Invoke(nameof(TurnOnCollisions), player.respawnInvulnerability);
+    }
+
+    private void TurnOnCollisions()
+    {
+        player.gameObject.layer = LayerMask.NameToLayer("Player");
     }
 
     public void OnAsteroidDestroyed(Asteroid asteroid)
@@ -81,22 +94,32 @@ public class GameManager : MonoBehaviour
         } else {
             SetScore(score + 25); // large asteroid
         }
+        player.AddReward(0.0001f);
     }
 
-    public void OnPlayerDeath(Player player)
+    public void OnPlayerDeath()
     {
-        player.gameObject.SetActive(false);
-
         explosionEffect.transform.position = player.transform.position;
         explosionEffect.Play();
 
+        player.gameObject.transform.position = Vector3.one * 10000f;
         SetLives(lives - 1);
 
         if (lives <= 0) {
             gameOverUI.SetActive(true);
+
+            player.AddReward(-1f);
+            player.gameObject.SetActive(false);
+            player.EndEpisode();
         } else {
+            player.AddReward(-0.3f);
+            TurnOffCollisions();
             Invoke(nameof(Respawn), player.respawnDelay);
         }
     }
 
+    private void TurnOffCollisions()
+    {
+        player.gameObject.layer = LayerMask.NameToLayer("Ignore Collisions");
+    }
 }
