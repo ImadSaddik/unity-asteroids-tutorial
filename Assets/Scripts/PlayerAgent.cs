@@ -66,16 +66,33 @@ public class PlayerAgent : Agent
 
         if (actions.DiscreteActions[2] == 1 && !canShoot) {
             canShoot = true;
-            Shoot();
+            shootBasedOnScore();
         } else if (actions.DiscreteActions[2] == 0) {
             canShoot = false;
         }
     }
 
-    private void Shoot()
+    private void shootBasedOnScore()
+    {
+        if (GameManager.Instance.score < 5000)
+        {
+            Shoot(transform.up);
+        } else if (GameManager.Instance.score >= 5000 && GameManager.Instance.score < 15000)
+        {
+            Shoot(transform.up);
+            Shoot(0.75f * transform.up);
+        } else if (GameManager.Instance.score >= 15000)
+        {
+            Shoot(Quaternion.Euler(0f, 0f, 30f) * transform.up);
+            Shoot(transform.up);
+            Shoot(Quaternion.Euler(0f, 0f, -30f) * transform.up);
+        }
+    }
+
+    private void Shoot(Vector3 direction)
     {
         Bullet bullet = Instantiate(bulletPrefab, transform.position, transform.rotation);
-        bullet.Shoot(transform.up);
+        bullet.Shoot(direction);
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)
@@ -114,7 +131,7 @@ public class PlayerAgent : Agent
         }
 
         if (canTakeRewardForAvoidingBeingHit) {
-            AddReward(0.0001f);
+            AddReward(0.0002f);
         }
     }
 
@@ -149,6 +166,14 @@ public class PlayerAgent : Agent
         else if (collision.gameObject.CompareTag("Boundary"))
         {
             AddReward(-0.1f);
+        }
+    }
+
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Boundary"))
+        {
+            AddReward(-0.001f);
         }
     }
 

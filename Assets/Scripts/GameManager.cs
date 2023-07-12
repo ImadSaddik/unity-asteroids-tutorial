@@ -6,12 +6,13 @@ public class GameManager : MonoBehaviour
     public static GameManager Instance { get; private set; }
 
     public int score { get; private set; }
+    private int maxScore;
     public int lives { get; private set; }
 
     [SerializeField] private PlayerAgent player;
     [SerializeField] private ParticleSystem explosionEffect;
-    [SerializeField] private GameObject gameOverUI;
     [SerializeField] private Text scoreText;
+    [SerializeField] private Text maxScoreText;
     [SerializeField] private Text livesText;
     [SerializeField] private Text rewardText;
 
@@ -32,14 +33,17 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        // if (lives <= 0 && Input.GetKeyDown(KeyCode.Return)) {
-        //     NewGame();
-        // }
-
         if (lives <= 0) {
             NewGame();
         }
+
+        if (score > maxScore)
+        {
+            maxScore = score;
+        }
+
         rewardText.text = "Reward: " + player.GetCumulativeReward().ToString("0.00");
+        maxScoreText.text = "Max score: " + maxScore.ToString();
     }
 
     private void NewGame()
@@ -51,8 +55,6 @@ public class GameManager : MonoBehaviour
             Destroy(asteroids[i].gameObject);
         }
 
-        gameOverUI.SetActive(false);
-
         SetScore(0);
         SetLives(3);
         Respawn();
@@ -61,7 +63,7 @@ public class GameManager : MonoBehaviour
     private void SetScore(int score)
     {
         this.score = score;
-        scoreText.text = score.ToString();
+        scoreText.text = "Score: " + score.ToString();
     }
 
     private void SetLives(int lives)
@@ -94,7 +96,7 @@ public class GameManager : MonoBehaviour
         } else {
             SetScore(score + 25); // large asteroid
         }
-        player.AddReward(0.0001f);
+        player.AddReward(0.0002f);
     }
 
     public void OnPlayerDeath()
@@ -106,8 +108,6 @@ public class GameManager : MonoBehaviour
         SetLives(lives - 1);
 
         if (lives <= 0) {
-            gameOverUI.SetActive(true);
-
             player.AddReward(-1f);
             player.gameObject.SetActive(false);
             player.EndEpisode();
